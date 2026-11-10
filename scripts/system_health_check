@@ -1,0 +1,218 @@
+#!/bin/bash
+
+# ==========================================================
+# Project Name : Linux Server Administration and Automation
+# Script Name  : System Health Check
+# Author       : Huda Zainab
+# Purpose      : Monitor overall Linux server health
+# ==========================================================
+
+
+# ------------------ STEP 1: DEFINE VARIABLES ------------------
+
+# Set monitoring thresholds
+CPU_WARNING=70
+CPU_CRITICAL=90
+
+MEMORY_WARNING=70
+MEMORY_CRITICAL=90
+
+DISK_WARNING=80
+DISK_CRITICAL=90
+
+# Store date and server hostname
+CURRENT_DATE=$(date)
+SERVER_NAME=$(hostname)
+
+
+# ------------------ STEP 2: DISPLAY SCRIPT HEADER ------------------
+
+echo "===================================================="
+echo "             LINUX SERVER HEALTH CHECK"
+echo "===================================================="
+
+echo "Server Name : $SERVER_NAME"
+echo "Date        : $CURRENT_DATE"
+
+echo ""
+echo "Starting complete server health monitoring..."
+
+
+# ------------------ STEP 3: CHECK SYSTEM UPTIME ------------------
+
+echo ""
+echo "===================================================="
+echo "                 SYSTEM UPTIME"
+echo "===================================================="
+
+uptime
+
+echo ""
+echo "System uptime check completed."
+
+
+# ------------------ STEP 4: CHECK CPU USAGE ------------------
+
+echo ""
+echo "===================================================="
+echo "                  CPU MONITORING"
+echo "===================================================="
+
+# Read CPU idle percentage
+CPU_IDLE=$(top -bn1 | awk -F',' '/Cpu\(s\)/ {
+    for (i=1; i<=NF; i++) {
+        if ($i ~ /id/) {
+            gsub(/[^0-9.]/, "", $i)
+            print $i
+            exit
+        }
+    }
+}')
+
+# Calculate CPU usage
+if [[ "$CPU_IDLE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    CPU_USAGE=$(awk -v idle="$CPU_IDLE" \
+        'BEGIN {printf "%.0f", 100-idle}')
+else
+    CPU_USAGE=0
+    echo "WARNING: Unable to read CPU usage."
+fi
+
+echo "CPU Usage: $CPU_USAGE%"
+
+# Check CPU thresholds
+if [ "$CPU_USAGE" -ge "$CPU_CRITICAL" ]; then
+    echo "CRITICAL ALERT: CPU usage is very high."
+
+elif [ "$CPU_USAGE" -ge "$CPU_WARNING" ]; then
+    echo "WARNING: CPU usage is above normal."
+
+else
+    echo "STATUS: CPU usage is normal."
+fi
+
+
+# ------------------ STEP 5: CHECK MEMORY USAGE ------------------
+
+echo ""
+echo "===================================================="
+echo "                MEMORY MONITORING"
+echo "===================================================="
+
+# Get total and available RAM in MB
+TOTAL_MEMORY=$(free -m | awk '/^Mem:/ {print $2}')
+AVAILABLE_MEMORY=$(free -m | awk '/^Mem:/ {print $7}')
+
+# Calculate used memory
+USED_MEMORY=$((TOTAL_MEMORY - AVAILABLE_MEMORY))
+
+# Calculate memory usage percentage
+MEMORY_USAGE=$(awk -v used="$USED_MEMORY" -v total="$TOTAL_MEMORY" \
+    'BEGIN {
+        if (total > 0)
+            printf "%.0f", (used/total)*100
+        else
+            print 0
+    }')
+
+echo "Total Memory     : ${TOTAL_MEMORY} MB"
+echo "Used Memory      : ${USED_MEMORY} MB"
+echo "Available Memory : ${AVAILABLE_MEMORY} MB"
+echo "Memory Usage     : ${MEMORY_USAGE}%"
+
+# Check memory thresholds
+if [ "$MEMORY_USAGE" -ge "$MEMORY_CRITICAL" ]; then
+    echo "CRITICAL ALERT: Memory usage is very high."
+
+elif [ "$MEMORY_USAGE" -ge "$MEMORY_WARNING" ]; then
+    echo "WARNING: Memory usage is above normal."
+
+else
+    echo "STATUS: Memory usage is normal."
+fi
+
+
+# ------------------ STEP 6: CHECK DISK USAGE ------------------
+
+echo ""
+echo "===================================================="
+echo "                  DISK MONITORING"
+echo "===================================================="
+
+# Get root filesystem disk usage
+DISK_USAGE=$(df -P / | awk 'NR==2 {
+    gsub(/%/, "", $5)
+    print $5
+}')
+
+echo "Root Disk Usage: ${DISK_USAGE}%"
+
+# Check disk thresholds
+if [ "$DISK_USAGE" -ge "$DISK_CRITICAL" ]; then
+    echo "CRITICAL ALERT: Disk space is almost full."
+
+elif [ "$DISK_USAGE" -ge "$DISK_WARNING" ]; then
+    echo "WARNING: Disk usage is above normal."
+
+else
+    echo "STATUS: Disk space is healthy."
+fi
+
+# Display filesystem information
+echo ""
+echo "Filesystem Details:"
+df -h /
+
+
+# ------------------ STEP 7: CHECK SYSTEM LOAD ------------------
+
+echo ""
+echo "===================================================="
+echo "                 SYSTEM LOAD"
+echo "===================================================="
+
+# Display 1-minute, 5-minute and 15-minute load averages
+uptime
+
+echo ""
+echo "System load check completed."
+
+
+# ------------------ STEP 8: CHECK TOP PROCESSES ------------------
+
+echo ""
+echo "===================================================="
+echo "             TOP RESOURCE CONSUMING PROCESSES"
+echo "===================================================="
+
+# Display top 5 CPU-consuming processes
+echo ""
+echo "Top 5 CPU Processes:"
+
+ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -n 6
+
+# Display top 5 memory-consuming processes
+echo ""
+echo "Top 5 Memory Processes:"
+
+ps -eo pid,comm,%cpu,%mem --sort=-%mem | head -n 6
+
+
+# ------------------ STEP 9: FINAL HEALTH SUMMARY ------------------
+
+echo ""
+echo "===================================================="
+echo "               SERVER HEALTH SUMMARY"
+echo "===================================================="
+
+echo "Server Name       : $SERVER_NAME"
+echo "CPU Usage         : ${CPU_USAGE}%"
+echo "Memory Usage      : ${MEMORY_USAGE}%"
+echo "Disk Usage        : ${DISK_USAGE}%"
+
+echo ""
+echo "Server health check completed successfully."
+
+echo "===================================================="
+echo "                 SCRIPT FINISHED"
+echo "===================================================="
